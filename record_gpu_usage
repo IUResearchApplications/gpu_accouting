@@ -4,11 +4,13 @@ from __future__ import division
 
 from pynvml import *
 import datetime, os
-import MySQLdb, warnings
+#import MySQLdb
+import warnings
+import mysql.connector
 import json
 import ConfigParser
  
-default_conf = '/etc/record_gpu_usage.conf'
+default_conf = '/etc/slurm/record_gpu_usage.conf'
       
 #
 # Converts errors into string messages
@@ -88,7 +90,7 @@ def get_config(config):
     return config.get('CLUSTER','name'), dict(config.items('DATABASE'))
 
 
-def write_data(cluster, db, dataset):
+def write_data_mysqldb_python(cluster, db, dataset):
     jobid = os.environ['SLURM_JOB_ID']
     userid = os.environ['SLURM_JOB_UID']
     db = MySQLdb.connect(db['host'], user=db['user'], passwd=db['password'], db=db['database'])
@@ -100,6 +102,20 @@ def write_data(cluster, db, dataset):
       cursor.execute(sql, (dataset, jobid, userid))
     db.commit()
 
+def write_data(cluster, db, dataset):
+    jobid = os.environ['SLURM_JOB_ID']
+    userid = os.environ['SLURM_JOB_UID']
+    file = open("/tmp/record_gpu_usage_mysql.out", "a")
+    db = mysql.connector.connect(host=db['host'], user=db['user'], passwd=db['password'], database=db['database'])
+    table = cluster + '_job_table'
+    sql = "update " + table + """ set admin_comment=%s where id_job=%s and id_user=%s"""
+    cursor = db.cursor()
+    with warnings.catch_warnings(): # supress mysql warnings like "out of range"
+      warnings.simplefilter("ignore")
+      cursor.execute(sql, (dataset, jobid, userid))
+    db.commit()
+    db.close()
+
 
 if __name__ == "__main__":
     config = ConfigParser.ConfigParser()
@@ -110,5 +126,3 @@ if __name__ == "__main__":
     write_data(cluster, db, to_json(rows))
     ClearAccounting()
     nvmlShutdown()
-
-
