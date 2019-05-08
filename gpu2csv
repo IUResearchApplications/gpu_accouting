@@ -1,0 +1,41 @@
+#!/usr/bin/env python
+
+import argparse
+import json
+import csv
+import os
+from subprocess import Popen, PIPE
+import sys
+
+field_list = ["user","jobid", "pid", "time","gpuUtilization","serial","maxMemoryUsage","memoryUtilization"]
+
+def get_pids(line):
+    x = line.strip().split(b'|')
+    user = x[0]
+    jobid = x[1]
+    pids = json.loads(x[2]) if x[2] else []
+    for p in pids:
+        p['user'] = user.decode()
+        p['jobid'] = jobid.decode()
+        yield p
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='View Slurm GPU data')
+    parser.add_argument('-s', "--startdate", help="The Start Date - format YYYY-MM-DD ")
+    parser.add_argument('-i', "--stdin", help="Use stdin for input instead of calling sacct", action = 'store_true')
+    args = parser.parse_args()
+
+    if args.stdin:
+        inf = sys.stdin
+    else:
+        cmd = ["sacct", "-anXPo", "User,Job,AdminComment"]
+        if args.startdate:
+            cmd += ["--starttime", args.startdate]
+        p = Popen(cmd, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = p.communicate()
+        inf = stdout.splitlines()
+    pids = (pid for line in inf for pid in get_pids(line))
+    writer = csv.DictWriter(sys.stdout, field_list, lineterminator=os.linesep)
+    writer.writeheader()
+    writer.writerows(pids)
