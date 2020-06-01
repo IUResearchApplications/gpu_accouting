@@ -94,7 +94,7 @@ def write_data_mysqldb_python(cluster, db, dataset):
     jobid = os.environ['SLURM_JOB_ID']
     userid = os.environ['SLURM_JOB_UID']
     db = MySQLdb.connect(db['host'], user=db['user'], passwd=db['password'], db=db['database'])
-    table = cluster + '_job_table'
+    table = '`' + cluster + '_job_table' + '`'
     sql = "update " + table + """ set admin_comment=%s where id_job=%s and id_user=%s"""
     cursor = db.cursor()
     with warnings.catch_warnings(): # supress mysql warnings like "out of range"
@@ -107,7 +107,7 @@ def write_data(cluster, db, dataset):
     userid = os.environ['SLURM_JOB_UID']
     file = open("/tmp/record_gpu_usage_mysql.out", "a")
     db = mysql.connector.connect(host=db['host'], user=db['user'], passwd=db['password'], database=db['database'])
-    table = cluster + '_job_table'
+    table = '`' + cluster + '_job_table' + '`'
     sql = "update " + table + """ set admin_comment=%s where id_job=%s and id_user=%s"""
     cursor = db.cursor()
     with warnings.catch_warnings(): # supress mysql warnings like "out of range"
