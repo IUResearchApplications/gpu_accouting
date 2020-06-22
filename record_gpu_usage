@@ -3,13 +3,17 @@
 from __future__ import division
 
 from pynvml import *
-import datetime, os
-#import MySQLdb
+import os
 import warnings
 import mysql.connector
 import json
-import ConfigParser
- 
+
+import sys
+if sys.version_info[0] < 3:
+    import ConfigParser
+else:
+    import configparser as ConfigParser
+
 default_conf = '/etc/slurm/record_gpu_usage.conf'
       
 #
@@ -22,11 +26,13 @@ def handleError(err):
         return err.__str__()
 
 
-def ClearAccounting():
-    deviceCount = nvmlDeviceGetCount()
+def available_devices():
+    return (int(i) for i in os.environ['CUDA_VISIBLE_DEVICES'].split(','))
 
-    for i in range(0, deviceCount):
-        handle = nvmlDeviceGetHandleByIndex(i)    
+
+def ClearAccounting():
+    for i in available_devices():
+        handle = nvmlDeviceGetHandleByIndex(i)
         nvmlDeviceClearAccountingPids(handle)
 
 
@@ -35,19 +41,14 @@ def to_json(dataset):
        return { "serial":row[0], "pid":row[1], "gpuUtilization":row[2], "memoryUtilization":row[3], "maxMemoryUsage":row[4], "time":row[5]} 
    data = [row_to_json(row) for row in dataset]
    return json.dumps(data)
-	
+
 #######
 def DeviceQuery():
 
     try:
-        #
-        # Initialize NVML
-        #
         nvmlInit()
 
-        deviceCount = nvmlDeviceGetCount()
-
-        for i in range(0, deviceCount):
+        for i in available_devices():
             handle = nvmlDeviceGetHandleByIndex(i)
 
             try:
@@ -65,18 +66,16 @@ def DeviceQuery():
                             maxMemoryUsage = None
                         else:
                             maxMemoryUsage = stats.maxMemoryUsage / 1024 / 1024
-                        is_running = "%d" % stats.isRunning
                     except NVMLError as err:
                         if (err.value == NVML_ERROR_NOT_FOUND):
                             # probably went away
                             continue
                         err = handleError(err)
-                        gpuUtilization = err
-                        memoryUtilization = err
+                        stats.gpuUtilization = err
+                        stats.memoryUtilization = err
                         maxMemoryUsage = err
-                        time = err
-                        is_running = err
-           
+                        stats.time = err
+
                     yield serial, pid, stats.gpuUtilization, stats.memoryUtilization, maxMemoryUsage, stats.time         
 
             except NVMLError as err:
