@@ -38,7 +38,8 @@ def ClearAccounting():
 
 def to_json(dataset):
    def row_to_json(row):
-       return { "serial":row[0], "pid":row[1], "gpuUtilization":row[2], "memoryUtilization":row[3], "maxMemoryUsage":row[4], "time":row[5]} 
+       return { "serial": row[0], "pid": row[1], "gpuUtilization": row[2], "memoryUtilization": row[3],
+                "maxMemoryUsage": row[4], "time": row[5], "startTime": row[6]}
    data = [row_to_json(row) for row in dataset]
    return json.dumps(data)
 
@@ -76,7 +77,7 @@ def DeviceQuery():
                         maxMemoryUsage = err
                         stats.time = err
 
-                    yield serial, pid, stats.gpuUtilization, stats.memoryUtilization, maxMemoryUsage, stats.time         
+                    yield serial, pid, stats.gpuUtilization, stats.memoryUtilization, maxMemoryUsage, stats.time, stats.startTime
 
             except NVMLError as err:
                 print(err)

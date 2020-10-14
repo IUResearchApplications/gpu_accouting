@@ -15,7 +15,7 @@ else:
 class TestStringMethods(unittest.TestCase):
 
     def test_to_json(self):
-        rows = [["a", "b", "c", "d", "e", "f"]]
+        rows = [["a", "b", "c", "d", "e", "f", "g"]]
         actual = json.loads(record_gpu_usage.to_json(rows))
         self.assertEqual('a', actual[0]['serial'])
         self.assertEqual('b', actual[0]['pid'])
@@ -23,6 +23,7 @@ class TestStringMethods(unittest.TestCase):
         self.assertEqual('d', actual[0]['memoryUtilization'])
         self.assertEqual('e', actual[0]['maxMemoryUsage'])
         self.assertEqual('f', actual[0]['time'])
+        self.assertEqual('g', actual[0]['startTime'])
 
     def test_get_config(self):
         config = ConfigParser.ConfigParser()
@@ -48,7 +49,7 @@ class TestStringMethods(unittest.TestCase):
         os.environ['CUDA_VISIBLE_DEVICES'] = "1,3,5"
         record_gpu_usage.ClearAccounting()
         actual = [x[0][0] for x in gethandle.call_args_list]
-        self.assertEquals(actual, [1, 3, 5])
+        self.assertEqual(actual, [1, 3, 5])
 
     def test_available_devices(self):
         os.environ['CUDA_VISIBLE_DEVICES'] = "1,3,5"
