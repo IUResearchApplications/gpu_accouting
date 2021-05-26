@@ -1,0 +1,125 @@
+#!/usr/bin/env python
+
+from __future__ import division
+
+from pynvml import *
+import os
+import warnings
+import mysql.connector
+import json
+
+import sys
+if sys.version_info[0] < 3:
+    import ConfigParser
+else:
+    import configparser as ConfigParser
+
+default_conf = '/etc/slurm/record_gpu_usage.conf'
+      
+#
+# Converts errors into string messages
+#
+def handleError(err):
+    if (err.value == NVML_ERROR_NOT_SUPPORTED):
+        return "N/A"
+    else:
+        return err.__str__()
+
+def available_devices():
+    deviceCount = nvmlDeviceGetCount()
+    return deviceCount
+
+def ClearAccounting():
+    for i in range(available_devices()):
+        handle = nvmlDeviceGetHandleByIndex(i)
+        nvmlDeviceClearAccountingPids(handle)
+
+def to_json(dataset):
+   def row_to_json(row):
+       return { "serial": row[0], "pid": row[1], "gpuUtilization": row[2], "memoryUtilization": row[3],
+                "maxMemoryUsage": row[4], "time": row[5], "startTime": row[6]}
+   data = [row_to_json(row) for row in dataset]
+   return json.dumps(data)
+
+#######
+def DeviceQuery():
+
+    try:
+
+        for i in range(available_devices()):
+            handle = nvmlDeviceGetHandleByIndex(i)
+
+            try:
+                serial = str(nvmlDeviceGetSerial(handle))
+            except NVMLError as err:
+                serial = handleError(err)
+           
+            try:
+                pids = nvmlDeviceGetAccountingPids(handle)
+             
+                for pid in pids :
+                    try:
+                        stats = nvmlDeviceGetAccountingStats(handle, pid) 
+                        if (stats.maxMemoryUsage == None):
+                            maxMemoryUsage = None
+                        else:
+                            maxMemoryUsage = stats.maxMemoryUsage / 1024 / 1024
+                    except NVMLError as err:
+                        if (err.value == NVML_ERROR_NOT_FOUND):
+                            # probably went away
+                            continue
+                        err = handleError(err)
+                        stats.gpuUtilization = err
+                        stats.memoryUtilization = err
+                        maxMemoryUsage = err
+                        stats.time = err
+
+                    yield serial, pid, stats.gpuUtilization, stats.memoryUtilization, maxMemoryUsage, stats.time, stats.startTime
+
+            except NVMLError as err:
+                print(err)
+
+    except NVMLError as err:
+        print(err)
+    
+
+def get_config(config):
+    return config.get('CLUSTER','name'), dict(config.items('DATABASE'))
+
+
+def write_data_mysqldb_python(cluster, db, dataset):
+    jobid = os.environ['SLURM_JOB_ID']
+    userid = os.environ['SLURM_JOB_UID']
+    db = MySQLdb.connect(db['host'], user=db['user'], passwd=db['password'], db=db['database'])
+    table = '`' + cluster + '_job_table' + '`'
+    sql = "update " + table + """ set admin_comment=%s where id_job=%s and id_user=%s"""
+    cursor = db.cursor()
+    with warnings.catch_warnings(): # supress mysql warnings like "out of range"
+      warnings.simplefilter("ignore")
+      cursor.execute(sql, (dataset, jobid, userid))
+    db.commit()
+
+def write_data(cluster, db, dataset):
+    jobid = os.environ['SLURM_JOB_ID']
+    userid = os.environ['SLURM_JOB_UID']
+    file = open("/tmp/record_gpu_usage_mysql.out", "a")
+    db = mysql.connector.connect(host=db['host'], user=db['user'], passwd=db['password'], database=db['database'])
+    table = '`' + cluster + '_job_table' + '`'
+    sql = "update " + table + """ set admin_comment=%s where id_job=%s and id_user=%s"""
+    cursor = db.cursor()
+    with warnings.catch_warnings(): # supress mysql warnings like "out of range"
+      warnings.simplefilter("ignore")
+      cursor.execute(sql, (dataset, jobid, userid))
+    db.commit()
+    db.close()
+
+
+if __name__ == "__main__":
+    config = ConfigParser.ConfigParser()
+    config.read(default_conf)
+    cluster, db = get_config(config)
+    nvmlInit()    
+    rows = list(DeviceQuery())
+    write_data(cluster, db, to_json(rows))
+    ClearAccounting()
+    nvmlShutdown()
