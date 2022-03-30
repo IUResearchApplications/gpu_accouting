@@ -108,7 +108,7 @@ def write_data(cluster, db, dataset):
     file = open("/tmp/record_gpu_usage_mysql.out", "a")
     db = mysql.connector.connect(host=db['host'], user=db['user'], passwd=db['password'], database=db['database'])
     table = '`' + cluster + '_job_table' + '`'
-    sql = "update " + table + """ set admin_comment=%s where id_job=%s and id_user=%s"""
+    sql = "update " + table + """ set admin_comment=concat(ifnull(admin_comment,''),%s) where id_job=%s and id_user=%s"""
     cursor = db.cursor()
     with warnings.catch_warnings(): # supress mysql warnings like "out of range"
       warnings.simplefilter("ignore")
